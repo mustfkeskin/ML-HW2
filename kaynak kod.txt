@@ -1,0 +1,211 @@
+rm(list=ls())
+
+# csv dosyasý okunuyor
+df <- read.csv('F:/Ders/Ders - Yüksek Lisans/Machine Learning/hw2/PCA/sayi.csv',header = FALSE)
+df <- as.data.frame(df)
+
+# Sýnýf bilgisi küçükten büyüðe yer alýcak þekilde veri sýralanýyor
+df <- df[order(df$V65),]
+
+indis  <- 0
+vektor <- c()
+
+
+for(i in 1:dim(df)[1]){
+    if(indis != df[i,65]){
+        indis  <- df[i,65]
+        vektor <- c(vektor,i - 1)
+    }
+}
+
+sýfýr <- df[1:vektor[1],]
+bir   <- df[(vektor[1]+1):vektor[2],]
+iki   <- df[(vektor[2]+1):vektor[3],]
+üç    <- df[(vektor[3]+1):vektor[4],]
+dört  <- df[(vektor[4]+1):vektor[5],]
+beþ   <- df[(vektor[5]+1):vektor[6],]
+altý  <- df[(vektor[6]+1):vektor[7],]
+yedi  <- df[(vektor[7]+1):vektor[8],]
+sekiz <- df[(vektor[8]+1):vektor[9],]
+dokuz <- df[(vektor[9]+1):dim(df)[1],]
+
+train_size  <- 5
+
+#herbir sýnýf için ilk beþ data train datasý olarak saklanýyor
+train_sýfýr <- sýfýr[1:train_size,1:64]
+train_bir   <- bir  [1:train_size,1:64]
+train_iki   <- iki  [1:train_size,1:64]
+train_üç    <- üç   [1:train_size,1:64]
+train_dört  <- dört [1:train_size,1:64]
+train_beþ   <- beþ  [1:train_size,1:64]
+train_altý  <- altý [1:train_size,1:64]
+train_yedi  <- yedi [1:train_size,1:64]
+train_sekiz <- sekiz[1:train_size,1:64]
+train_dokuz <- dokuz[1:train_size,1:64]
+
+# train datasý olarak kullanýlan datalar atýlýyor
+test_sýfýr  <- sýfýr[-(1:train_size),]
+test_bir    <- bir  [-(1:train_size),]
+test_iki    <- iki  [-(1:train_size),]
+test_üç     <- üç   [-(1:train_size),]
+test_dört   <- dört [-(1:train_size),]
+test_beþ    <- beþ  [-(1:train_size),]
+test_altý   <- altý [-(1:train_size),]
+test_yedi   <- yedi [-(1:train_size),]
+test_sekiz  <- sekiz[-(1:train_size),]
+test_dokuz  <- dokuz[-(1:train_size),]
+
+# 
+train_data          <- rbind(train_sýfýr,train_bir,train_iki,train_üç,train_dört,train_beþ,train_altý,train_yedi,train_sekiz,train_dokuz)
+test_data           <- rbind(test_sýfýr,test_bir,test_iki,test_üç,test_dört,test_beþ,test_altý,test_yedi,test_sekiz,test_dokuz)
+train_data_col_mean <- colMeans(train_data)
+
+
+#train datasýndan her özelliðin ortalamasý çýkartýrýlýyor
+for(i in 1:dim(train_data)[1]){
+    for(j in 1:64){
+        train_data[i,j] <- train_data[i,j] - train_data_col_mean[j]
+    }
+}
+
+#test datasýndan her özelliðin ortalamasý çýkartýrýlýyor
+for(i in 1:dim(test_data)[1]){
+    for(j in 1:64){
+        test_data[i,j] <- test_data[i,j] - train_data_col_mean[j]
+    }
+}
+
+#N^2 x M 'lik formata çeviriliyor.
+train_data <- t(train_data)
+test_data  <- t(test_data)
+
+# R eigen fonksiyonu eigenvaluelarý azalarak þekilde sort ediyor
+cov_train_data <- cov(t(train_data))
+eig_train_data <- eigen(cov_train_data)
+
+
+#eigen valuelar'ýn toplamý alýnýyor
+sum_eigs <- sum(eig_train_data$values)
+toplam <- 0
+i<- 1
+#belli bir eþik seviyesi belirleniyor.
+threshold <- 0.8
+
+# belirlenen eþik seviyesinde yer alýcak eigen valuelar kontrol ediliyor
+while(toplam/sum_eigs < threshold){
+    toplam <- toplam + eig_train_data$values[i]
+    i<- i + 1
+}
+
+
+#en büyük eigen valuelar ve vectorler saklanýyor
+values  <- eig_train_data[[1]][1:i]
+vectors <- eig_train_data[[2]][1:i,]
+
+for(k in 1:length(values)){
+    vectors[k,] <-vectors[k,] / sum(vectors[k,] * vectors[k,])
+}
+
+vectors <- t(vectors)
+U <-  as.matrix(cov_train_data) %*% as.matrix(vectors)
+P <-  matrix(nrow=dim(train_data)[2],ncol=k)
+
+# her bir train datasý eiegenspace'e geçiriliyor
+for(i in 1:dim(train_data)[2]){
+    pk <- as.matrix(t(U)) %*%  as.matrix(train_data[,i])
+    for(j in 1:length(pk)){
+        P[i,j] <- pk[j]
+    }
+}
+
+
+öklid <- function(v,t){
+    toplam <- 0
+    for(i in 1:length(v)){
+        toplam <- toplam + (v[i] - t[i])**2
+    }
+    return(toplam)
+}
+
+
+# test örneðinin hangi sýnýfa ait olduðu bulunuyor
+# train datasý sýnýf bazýnda sýralý olduðu için ve R da indis 1 den baþladýðý için 5 e bölünüyor
+# 1,2,3,4,5 ilk beþ satýr 0. sýnýfý
+# sonraki her beþ satýr bir sonraki sýnýfý tutuyor.
+find_min <- function(Pk,target){
+    
+    min  <- 99999999999
+    yer  <- 0
+    for(i in 1:dim(Pk)[1]){
+        gecici <- öklid(Pk[i,],t(tk))
+        if(gecici < min){
+            min <- gecici
+            yer <- i
+        }
+    }
+    return((yer -1) %/% 5)
+}
+
+result        <- c()
+true_index    <- c()
+false_index   <- c()
+result_vektor <- c()
+class_confusion_matrix <-  matrix(nrow=10,ncol=10,0)
+
+#class confusion matrisi oluþturuluyor
+for(i in 1:dim(test_data)[2]){
+	tk                                         <- as.matrix(t(U))  %*% as.matrix(test_data[,i][1:64])
+	result                                     <- find_min(P,tk) + 1
+	class_index                                <- test_data[,i][65] + 1
+	class_confusion_matrix[class_index,result] <- class_confusion_matrix[class_index,result] + 1
+	result_vektor                              <- c(result_vektor,result - 1)
+	if(class_index==result){
+	true_index <- c(true_index,i)
+	}else{
+	false_index <- c(false_index,i)
+	}
+}
+
+#toplam baþarý
+toplam <-0
+for(i in 1:10){
+    toplam <- toplam + class_confusion_matrix[i,i]
+}
+accuracy <- toplam/dim(test_data)[2]
+
+# class confusion matrisi ve sistem baþarýsý ekrana bastýrýlýyor
+class_confusion_matrix
+accuracy
+
+#Her bir sýnýfýn baþarýsý ekrana bastýrýlýyor
+for(i in 1:10){
+    k <- i
+    print(paste(class_confusion_matrix[k,k] / sum(class_confusion_matrix[k,])))
+}
+
+
+
+indis <- 1399
+n <- df[true_index[indis],1:64]
+m = matrix(as.numeric(n),8,8)
+image(m)
+result_vektor[true_index[indis]]
+df[true_index[indis],65]
+
+
+
+
+indis <- 1399
+n <- df[false_index[indis],1:64]
+m = matrix(as.numeric(n),8,8)
+image(m)
+result_vektor[false_index[indis]]
+df[false_index[indis],65]
+
+
+
+
+indis <- 1399
+n <- dört[indis],1:64]
+m = matrix(as.numeric(n),8,8)
+image(m)
